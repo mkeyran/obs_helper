@@ -10,6 +10,9 @@ from datetime import datetime
 class Function:
     def __init__(self, ui):
         self._ui: QTextEdit = ui
+    
+    def update(self):
+        pass
 
     def run(self, *args):
         raise NotImplementedError
@@ -24,6 +27,13 @@ class Journal(Function):
         today = datetime.now().strftime("%Y-%m-%d")
         self.file_path = self.journal_path / f"{today}.md"
 
+        if not self.file_path.exists():
+            self.create_from_template()
+        self.load_note()
+    
+    def update(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.file_path = self.journal_path / f"{today}.md"
         if not self.file_path.exists():
             self.create_from_template()
         self.load_note()
@@ -42,7 +52,7 @@ class Journal(Function):
         with open(self.file_path, "r") as file:
             self.text = file.read()
         self._ui.setText(self.text)
-        self._ui.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
+        # self._ui.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
 
     def run(self, text):
         with open(self.file_path, "w") as file:
@@ -52,14 +62,16 @@ class Journal(Function):
 class Scratchpad(Function):
     def __init__(self, ui):
         super().__init__(ui)
+        self.update()
+    
+    def update(self):
         try:
             with open(Path(config["obsidian_path"]) / config["scratchpad_name"], "r") as f:
                 self.text = f.read()
         except FileNotFoundError:
             self.text = ""
         self._ui.setText(self.text)
-        self._ui.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
-    
+
     def run(self, text):
         with open(Path(config["obsidian_path"]) / config["scratchpad_name"], "w") as f:
             f.write(text)
@@ -67,6 +79,9 @@ class Scratchpad(Function):
 class DistractionList(Function):
     def __init__(self, ui):
         super().__init__(ui)
+
+    def update(self):
+        self._ui.setPlainText("")
 
     def run(self, text):
         with open(Path(config["obsidian_path"]) / config["distraction_list_name"], "a") as f:

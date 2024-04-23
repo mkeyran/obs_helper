@@ -3,6 +3,8 @@ import argparse
 import sys
 
 from PySide6.QtCore import QSharedMemory, Qt, QObject, Signal, Slot, SLOT
+from PySide6.QtGui import QTextCursor
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -18,7 +20,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtDBus import QDBusConnection, QDBusInterface
 from config import config, dbus_serice_name
 from functions import functions
-
+import sqlite3
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,6 +47,12 @@ class MainWindow(QMainWindow):
         self.bus.registerObject("/", self, QDBusConnection.ExportAllSlots)
         self.bus.registerService(dbus_serice_name)
 
+        # Open or create a sqlit db with a table cursors, which contains the cursor position of each note
+        self.conn = sqlite3.connect('cursors.db')
+        self.c = self.conn.cursor()
+        self.c.execute('''CREATE TABLE IF NOT EXISTS cursors (note TEXT PRIMARY KEY, cursor INTEGER)''')
+        self.conn.commit()
+
         self.setGeometry(0, 0, 1024, 768)
         self.text_field = QTextEdit(self)
         self.button = QPushButton(action, self)
@@ -61,6 +69,7 @@ class MainWindow(QMainWindow):
         if action is not None:
             try:
                 self.function = functions[action](self.text_field)
+                self.restore_cursor(action)
                 self.show()
             except KeyError:
                 raise ValueError(f"Invalid action: {action}")
@@ -73,6 +82,20 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(e)
 
+    def restore_cursor(self, note):
+        self.c.execute('SELECT cursor FROM cursors WHERE note = ?', (note,))
+        cursor = self.c.fetchone()
+        if cursor is not None:
+            print(cursor[0])
+            temp_cursor = self.text_field.textCursor()
+            temp_cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, cursor[0])
+            self.text_field.setTextCursor(temp_cursor)
+
+    def save_cursor(self, note):
+        cursor = self.text_field.textCursor().position()
+        self.c.execute('INSERT OR REPLACE INTO cursors VALUES (?, ?)', (note, cursor))
+        self.conn.commit()
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.close()
@@ -81,6 +104,7 @@ class MainWindow(QMainWindow):
 
     def on_button_clicked(self):
         text = self.text_field.toPlainText()
+        self.save_cursor(self.action)
         self.function.run(text)
         self.close()
 
@@ -104,6 +128,8 @@ class MainWindow(QMainWindow):
         self.button.setText(action)
         self.function = functions[action](self.text_field)
         self.action = action
+        self.function.update()
+        self.restore_cursor(action)
         self.show()
 
     def closeEvent(self, event):
