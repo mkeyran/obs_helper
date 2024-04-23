@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from datetime import datetime
 
 import toml
 
@@ -27,6 +28,41 @@ class Function:
 
     def run(self, *args):
         raise NotImplementedError
+
+
+class Journal(Function):
+    def __init__(self, ui):
+        super().__init__(ui)
+        self.journal_path = Path(config["obsidian_path"])/config["journal_folder"]
+        self.template_path = Path(config["obsidian_path"])/config["journal_template"]
+        print (self.template_path)
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.file_path = self.journal_path / f"{today}.md"
+
+        if not self.file_path.exists():
+            self.create_from_template()
+        self.load_note()
+
+    def create_from_template(self):
+        if self.template_path.exists():
+            with open(self.template_path, "r") as template_file:
+                content = template_file.read()
+            with open(self.file_path, "w") as new_file:
+                new_file.write(content)
+        else:
+            with open(self.file_path, "w") as new_file:
+                new_file.write("# " + datetime.now().strftime("%Y-%m-%d") + "")
+
+    def load_note(self):
+        with open(self.file_path, "r") as file:
+            self.text = file.read()
+        self._ui.setText(self.text)
+        self._ui.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
+
+    def run(self, text):
+        with open(self.file_path, "w") as file:
+            file.write(text)
+
 
 class Scratchpad(Function):
     def __init__(self, ui):
@@ -55,6 +91,8 @@ class DistractionList(Function):
 functions = {
     "scratchpad": Scratchpad,
     "distraction_list": DistractionList,
+    "journal": Journal,
+
 }
 
 
