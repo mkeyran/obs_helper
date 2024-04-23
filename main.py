@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSharedMemory, Qt
+from PySide6.QtCore import QSharedMemory, Qt, QObject
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -13,7 +13,10 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QMenu,
+    QSystemTrayIcon,
 )
+from PySide6.QtGui import QIcon
 from datetime import datetime
 
 import toml
@@ -76,7 +79,7 @@ class Scratchpad(Function):
         self._ui.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
     
     def run(self, text):
-        with open(config["obsidian_path"] / config["scrathpad_name"], "w") as f:
+        with open(Path(config["obsidian_path"]) / config["scratchpad_name"], "w") as f:
             f.write(text)
 
 class DistractionList(Function):
@@ -98,12 +101,12 @@ functions = {
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--action", type=str, required=True)
+    parser.add_argument("--action", type=str, required=False)
     return parser.parse_args()
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, action):
+    def __init__(self, action = None):
         super().__init__()
         if (self.single_check()) is False:
             print("Another instance is already running")
@@ -116,15 +119,7 @@ class MainWindow(QMainWindow):
         self.text_field = QTextEdit(self)
         self.button = QPushButton(action, self)
         self.button.clicked.connect(self.on_button_clicked)
-        # add keyboard shortcut Ctrl+Enter to the button
-        self.button.setShortcut("Ctrl+Return")
-        # add keyboard shortcut Esc to quit the application
 
-        try:
-            self.function = functions[action](self.text_field)
-        except KeyError:
-            raise ValueError(f"Invalid action: {action}")
-            QApplication.quit()
         layout = QVBoxLayout()
         layout.addWidget(self.text_field)
         layout.addWidget(self.button)
@@ -132,15 +127,51 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+        self.init_tray_icon()
+        if action is not None:
+            try:
+                self.function = functions[action](self.text_field)
+                self.show()
+            except KeyError:
+                raise ValueError(f"Invalid action: {action}")
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.close()
+        elif event.key() == Qt.Key_Return and event.modifiers() == Qt.ControlModifier:
+            self.on_button_clicked()
 
     def on_button_clicked(self):
         text = self.text_field.toPlainText()
         self.function.run(text)
         self.close()
+
+    def init_tray_icon(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(QIcon.fromTheme("document-open"))
+        tray_menu = QMenu()
+        for action in functions.keys():
+            print(action)
+            fun = lambda _, arg = action: self.on_tray_action(arg)
+            tray_menu.addAction(action).triggered.connect(fun)
+        tray_menu.addSeparator()
+        quit_action = tray_menu.addAction("Quit")
+        quit_action.triggered.connect(QApplication.quit)
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+
+    def on_tray_action(self, action):
+        print("Tray action:", action)
+        self.text_field.setPlainText("")
+        self.button.setText(action)
+        self.function = functions[action](self.text_field)
+        self.action = action
+        self.show()
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+
 
     def single_check(self):
         shared_memory = QSharedMemory("ObsidianHelper")
@@ -156,7 +187,6 @@ def main():
     app.setApplicationName("ObsidianHelper")
 
     window = MainWindow(args.action)
-    window.show()
 
     sys.exit(app.exec())
 
