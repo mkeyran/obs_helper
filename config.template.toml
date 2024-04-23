@@ -3,3 +3,8 @@ scratchpad_name = "scratchpad.md"
 distraction_list_name = "distraction_list.md"
 journal_folder = "/path/to/journal/folder"
 journal_template = "/path/to/journal/template.md"
+
+[shortcuts]
+journal = "Meta+j"
+scratchpad = "Meta+s"
+distraction_list = "Meta+d"

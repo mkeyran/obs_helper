@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSharedMemory, Qt, QObject
+from PySide6.QtCore import QSharedMemory, Qt, QObject, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon
 from datetime import datetime
+from PyHotKey import Key, keyboard_manager as manager
 
 import toml
 
@@ -106,6 +107,10 @@ def parse_args():
 
 
 class MainWindow(QMainWindow):
+
+    # Signal to be emitted when the hotkey is pressed
+    hotkey_pressed = Signal(str)
+
     def __init__(self, action = None):
         super().__init__()
         if (self.single_check()) is False:
@@ -119,7 +124,9 @@ class MainWindow(QMainWindow):
         self.text_field = QTextEdit(self)
         self.button = QPushButton(action, self)
         self.button.clicked.connect(self.on_button_clicked)
-
+        id = manager.register_hotkey([Key.cmd, Key.alt_l, 'z'], None,
+                              lambda: print("test"))
+        print(id)
         layout = QVBoxLayout()
         layout.addWidget(self.text_field)
         layout.addWidget(self.button)
@@ -128,12 +135,40 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
         self.init_tray_icon()
+        self.registerGlobalHotkeys()
+        self.hotkey_pressed.connect(self.on_tray_action)
         if action is not None:
             try:
                 self.function = functions[action](self.text_field)
                 self.show()
             except KeyError:
                 raise ValueError(f"Invalid action: {action}")
+    
+    def _parse_shortcut(self, shortcut):
+        """Parse something like Meta+Control+z and return a manager-compatible list"""
+        keys = shortcut.split("+")
+        lst = []
+        for key in keys:
+            if key == "Meta":
+                lst.append(Key.cmd)
+            elif key == "Control":
+                lst.append(Key.ctrl)
+            elif key == "Alt":
+                lst.append(Key.alt_l)
+            else:
+                lst.append(key)
+        return lst
+
+    def print_action(self, action):
+        self.hotkey_pressed.emit(action)
+        
+
+    def registerGlobalHotkeys(self):
+        for action in functions.keys():ddd
+            if config["shortcuts"][action] is not None:
+                ret = manager.register_hotkey(self._parse_shortcut(config["shortcuts"][action]), None, 
+                                        lambda action = action: self.print_action(action))
+                print(ret)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
