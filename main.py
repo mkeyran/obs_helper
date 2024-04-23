@@ -15,12 +15,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-config = {
-    "obsidian_path": Path("/home/keyran/Obsidian/"),
-    "scrathpad_name": "scratchpad.md",
-    "distraction_list_name": "distraction_list.md",
-}
+import toml
 
+# Load configuration from TOML file
+config_path = Path(__file__).parent / "config.toml"
+config = toml.load(str(config_path))
 
 class Function:
     def __init__(self, ui):
@@ -29,29 +28,27 @@ class Function:
     def run(self, *args):
         raise NotImplementedError
 
-
 class Scratchpad(Function):
     def __init__(self, ui):
         super().__init__(ui)
         try:
-            with open(config["obsidian_path"] / config["scrathpad_name"], "r") as f:
+            with open(Path(config["obsidian_path"]) / config["scratchpad_name"], "r") as f:
                 self.text = f.read()
         except FileNotFoundError:
             self.text = ""
         self._ui.setText(self.text)
         self._ui.moveCursor(QTextCursor.End, QTextCursor.MoveAnchor)
-
+    
     def run(self, text):
         with open(config["obsidian_path"] / config["scrathpad_name"], "w") as f:
             f.write(text)
-
 
 class DistractionList(Function):
     def __init__(self, ui):
         super().__init__(ui)
 
     def run(self, text):
-        with open(config["obsidian_path"] / config["distraction_list_name"], "a") as f:
+        with open(Path(config["obsidian_path"]) / config["distraction_list_name"], "a") as f:
             f.write("- " + text + "\n")
 
 
